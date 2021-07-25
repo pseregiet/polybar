@@ -11,6 +11,14 @@
 POLYBAR_NS
 
 namespace modules {
+  struct ws_colors
+  {
+      std::string foc;
+      std::string urg;
+      std::string bac;
+      std::string nor[10];
+  };
+
   class i3_module : public event_module<i3_module>, public input_handler {
    public:
     enum class state {
@@ -93,6 +101,7 @@ namespace modules {
     bool m_fuzzy_match{false};
 
     unique_ptr<i3_util::connection_t> m_ipc;
+    ws_colors m_clrs;
   };
 }  // namespace modules
 

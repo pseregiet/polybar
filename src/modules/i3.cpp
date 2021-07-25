@@ -31,8 +31,21 @@ namespace modules {
     m_pinworkspaces = m_conf.get(name(), "pin-workspaces", m_pinworkspaces);
     m_strip_wsnumbers = m_conf.get(name(), "strip-wsnumbers", m_strip_wsnumbers);
     m_fuzzy_match = m_conf.get(name(), "fuzzy-match", m_fuzzy_match);
-
+    
     m_conf.warn_deprecated(name(), "wsname-maxlen", "%name:min:max%");
+    m_clrs.foc = m_conf.get(name(),    "ws_colors_foc",  std::string("#000000"));
+    m_clrs.urg = m_conf.get(name(),    "ws_colors_urg",  std::string("#000000"));
+    m_clrs.bac = m_conf.get(name(),    "ws_colors_bac",  std::string("#00000000"));
+    m_clrs.nor[0] = m_conf.get(name(), "ws_colors_nor0", std::string("#000000"));
+    m_clrs.nor[1] = m_conf.get(name(), "ws_colors_nor1", std::string("#000000"));
+    m_clrs.nor[2] = m_conf.get(name(), "ws_colors_nor2", std::string("#000000"));
+    m_clrs.nor[3] = m_conf.get(name(), "ws_colors_nor3", std::string("#000000"));
+    m_clrs.nor[4] = m_conf.get(name(), "ws_colors_nor4", std::string("#000000"));
+    m_clrs.nor[5] = m_conf.get(name(), "ws_colors_nor5", std::string("#000000"));
+    m_clrs.nor[6] = m_conf.get(name(), "ws_colors_nor6", std::string("#000000"));
+    m_clrs.nor[7] = m_conf.get(name(), "ws_colors_nor7", std::string("#000000"));
+    m_clrs.nor[8] = m_conf.get(name(), "ws_colors_nor8", std::string("#000000"));
+    m_clrs.nor[9] = m_conf.get(name(), "ws_colors_nor9", std::string("#000000"));
 
     // Add formats and create components
     m_formatter->add(DEFAULT_FORMAT, DEFAULT_TAGS, {TAG_LABEL_STATE, TAG_LABEL_MODE});
@@ -136,7 +149,10 @@ namespace modules {
       if (m_indexsort) {
         sort(workspaces.begin(), workspaces.end(), i3_util::ws_numsort);
       }
-
+      state prev_state{state::NONE};
+      int wsc = 0;
+      int wsm = workspaces.size();
+      int wsci = 0;
       for (auto&& ws : workspaces) {
         state ws_state{state::NONE};
 
@@ -161,13 +177,48 @@ namespace modules {
         ws_name = string_util::trim(move(ws_name), ' ');
 
         auto icon = m_icons->get(ws->name, DEFAULT_WS_ICON, m_fuzzy_match);
-        auto label = m_statelabels.find(ws_state)->second->clone();
-
-        label->reset_tokens();
-        label->replace_token("%output%", ws->output);
-        label->replace_token("%name%", ws_name);
-        label->replace_token("%icon%", icon->get());
-        label->replace_token("%index%", to_string(ws->num));
+        std::string newname;
+        if (wsc == 0)
+        {
+            newname += "%{B";
+            newname += m_clrs.bac;
+            newname += "}%{F";
+            if (ws_state == state::FOCUSED || ws_state == state::VISIBLE) { newname += m_clrs.foc; }
+            else if (ws_state == state::URGENT) { newname += m_clrs.urg; }
+            else { newname += m_clrs.nor[wsci]; }
+            newname += "}%{T4}%{F-}%{B";
+            if (ws_state == state::FOCUSED || ws_state == state::VISIBLE) { newname += m_clrs.foc; }
+            else if (ws_state == state::URGENT) { newname += m_clrs.urg; }
+            else { newname += m_clrs.nor[wsci]; }
+            newname += "}%{T-} ";
+            newname += ws_name;
+        }
+        else
+        {
+            newname += "%{F";
+            if (prev_state == state::FOCUSED || prev_state == state::VISIBLE) { newname += m_clrs.foc; }
+            else if (prev_state == state::URGENT) { newname += m_clrs.urg; }
+            else { newname += m_clrs.nor[wsci-1]; }
+            newname += "}%{B";
+            if (ws_state == state::FOCUSED || ws_state == state::VISIBLE) { newname += m_clrs.foc; }
+            else if (ws_state == state::URGENT) { newname += m_clrs.urg; }
+            else { newname += m_clrs.nor[wsci]; }
+            newname += "}%{T4}%{F-}%{T-} ";
+            newname += ws_name;
+        }
+        wsc++;
+        wsci = std::min(wsc, 9);
+        if (wsc == wsm)
+        {
+            newname += "%{B-}%{T4}%{F";
+            if (ws_state == state::FOCUSED || ws_state == state::VISIBLE) { newname += m_clrs.foc; }
+            else if (ws_state == state::URGENT) { newname += m_clrs.urg; }
+            else { newname += m_clrs.nor[wsci-1]; }
+            newname += "}%{F-}%{T-} ";
+        
+        }
+        prev_state = ws_state;
+        auto label = std::make_unique<drawtypes::label>(newname, 0);
         m_workspaces.emplace_back(factory_util::unique<workspace>(ws->name, ws_state, move(label)));
       }
 
