@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "components/config.hpp"
-#include "components/parser.hpp"
 #include "components/renderer.hpp"
 #include "components/screen.hpp"
 #include "components/taskqueue.hpp"
@@ -11,6 +10,7 @@
 #include "drawtypes/label.hpp"
 #include "events/signal.hpp"
 #include "events/signal_emitter.hpp"
+#include "tags/dispatch.hpp"
 #include "utils/bspwm.hpp"
 #include "utils/color.hpp"
 #include "utils/factory.hpp"
@@ -39,6 +39,8 @@ using namespace signals::ui;
  * Create instance
  */
 bar::make_type bar::make(bool only_initialize_values) {
+  auto action_ctxt = make_unique<tags::action_context>();
+
   // clang-format off
   return factory_util::unique<bar>(
         connection::make(),
@@ -47,7 +49,8 @@ bar::make_type bar::make(bool only_initialize_values) {
         logger::make(),
         screen::make(),
         tray_manager::make(),
-        parser::make(),
+        tags::dispatch::make(*action_ctxt),
+        std::move(action_ctxt),
         taskqueue::make(),
         only_initialize_values);
   // clang-format on
@@ -59,15 +62,16 @@ bar::make_type bar::make(bool only_initialize_values) {
  * TODO: Break out all tray handling
  */
 bar::bar(connection& conn, signal_emitter& emitter, const config& config, const logger& logger,
-    unique_ptr<screen>&& screen, unique_ptr<tray_manager>&& tray_manager, unique_ptr<parser>&& parser,
-    unique_ptr<taskqueue>&& taskqueue, bool only_initialize_values)
+    unique_ptr<screen>&& screen, unique_ptr<tray_manager>&& tray_manager, unique_ptr<tags::dispatch>&& dispatch,
+    unique_ptr<tags::action_context>&& action_ctxt, unique_ptr<taskqueue>&& taskqueue, bool only_initialize_values)
     : m_connection(conn)
     , m_sig(emitter)
     , m_conf(config)
     , m_log(logger)
     , m_screen(forward<decltype(screen)>(screen))
     , m_tray(forward<decltype(tray_manager)>(tray_manager))
-    , m_parser(forward<decltype(parser)>(parser))
+    , m_dispatch(forward<decltype(dispatch)>(dispatch))
+    , m_action_ctxt(forward<decltype(action_ctxt)>(action_ctxt))
     , m_taskqueue(forward<decltype(taskqueue)>(taskqueue)) {
   string bs{m_conf.section()};
 
@@ -161,8 +165,12 @@ bar::bar(connection& conn, signal_emitter& emitter, const config& config, const 
   m_opts.locale = m_conf.get(bs, "locale", ""s);
 
   auto radius = m_conf.get<double>(bs, "radius", 0.0);
-  m_opts.radius.top = m_conf.get(bs, "radius-top", radius);
-  m_opts.radius.bottom = m_conf.get(bs, "radius-bottom", radius);
+  auto top = m_conf.get(bs, "radius-top", radius);
+  m_opts.radius.top_left = m_conf.get(bs, "radius-top-left", top);
+  m_opts.radius.top_right = m_conf.get(bs, "radius-top-right", top);
+  auto bottom = m_conf.get(bs, "radius-bottom", radius);
+  m_opts.radius.bottom_left = m_conf.get(bs, "radius-bottom-left", bottom);
+  m_opts.radius.bottom_right = m_conf.get(bs, "radius-bottom-right", bottom);
 
   auto padding = m_conf.get<unsigned int>(bs, "padding", 0U);
   m_opts.padding.left = m_conf.get(bs, "padding-left", padding);
@@ -197,9 +205,15 @@ bar::bar(connection& conn, signal_emitter& emitter, const config& config, const 
     }
   }
 
-  const auto parse_or_throw = [&](string key, unsigned int def) -> unsigned int {
+  const auto parse_or_throw_color = [&](string key, rgba def) -> rgba {
     try {
-      return m_conf.get(bs, key, rgba{def});
+      rgba color = m_conf.get(bs, key, def);
+
+      /*
+       * These are the base colors of the bar and cannot be alpha only
+       * In that case, we just use the alpha channel on the default value.
+       */
+      return color.try_apply_alpha_to(def);
     } catch (const exception& err) {
       throw application_error(sstream() << "Failed to set " << key << " (reason: " << err.what() << ")");
     }
@@ -217,20 +231,20 @@ bar::bar(connection& conn, signal_emitter& emitter, const config& config, const 
       m_log.warn("Ignoring `%s.background` (overridden by gradient background)", bs);
     }
   } else {
-    m_opts.background = parse_or_throw("background", m_opts.background);
+    m_opts.background = parse_or_throw_color("background", m_opts.background);
   }
 
   // Load foreground
-  m_opts.foreground = parse_or_throw("foreground", m_opts.foreground);
+  m_opts.foreground = parse_or_throw_color("foreground", m_opts.foreground);
 
   // Load over-/underline
   auto line_color = m_conf.get(bs, "line-color", rgba{0xFFFF0000});
   auto line_size = m_conf.get(bs, "line-size", 0);
 
   m_opts.overline.size = m_conf.get(bs, "overline-size", line_size);
-  m_opts.overline.color = parse_or_throw("overline-color", line_color);
+  m_opts.overline.color = parse_or_throw_color("overline-color", line_color);
   m_opts.underline.size = m_conf.get(bs, "underline-size", line_size);
-  m_opts.underline.color = parse_or_throw("underline-color", line_color);
+  m_opts.underline.color = parse_or_throw_color("underline-color", line_color);
 
   // Load border settings
   auto border_color = m_conf.get(bs, "border-color", rgba{0x00000000});
@@ -242,16 +256,16 @@ bar::bar(connection& conn, signal_emitter& emitter, const config& config, const 
 
   m_opts.borders.emplace(edge::TOP, border_settings{});
   m_opts.borders[edge::TOP].size = geom_format_to_pixels(border_top, m_opts.monitor->h);
-  m_opts.borders[edge::TOP].color = parse_or_throw("border-top-color", border_color);
+  m_opts.borders[edge::TOP].color = parse_or_throw_color("border-top-color", border_color);
   m_opts.borders.emplace(edge::BOTTOM, border_settings{});
   m_opts.borders[edge::BOTTOM].size = geom_format_to_pixels(border_bottom, m_opts.monitor->h);
-  m_opts.borders[edge::BOTTOM].color = parse_or_throw("border-bottom-color", border_color);
+  m_opts.borders[edge::BOTTOM].color = parse_or_throw_color("border-bottom-color", border_color);
   m_opts.borders.emplace(edge::LEFT, border_settings{});
   m_opts.borders[edge::LEFT].size = geom_format_to_pixels(border_left, m_opts.monitor->w);
-  m_opts.borders[edge::LEFT].color = parse_or_throw("border-left-color", border_color);
+  m_opts.borders[edge::LEFT].color = parse_or_throw_color("border-left-color", border_color);
   m_opts.borders.emplace(edge::RIGHT, border_settings{});
   m_opts.borders[edge::RIGHT].size = geom_format_to_pixels(border_right, m_opts.monitor->w);
-  m_opts.borders[edge::RIGHT].color = parse_or_throw("border-right-color", border_color);
+  m_opts.borders[edge::RIGHT].color = parse_or_throw_color("border-right-color", border_color);
 
   // Load geometry values
   auto w = m_conf.get(m_conf.section(), "width", "100%"s);
@@ -351,19 +365,18 @@ void bar::parse(string&& data, bool force) {
   m_renderer->begin(rect);
 
   try {
-    m_parser->parse(settings(), data);
-  } catch (const parser_error& err) {
+    m_dispatch->parse(settings(), *m_renderer, std::move(data));
+  } catch (const exception& err) {
     m_log.err("Failed to parse contents (reason: %s)", err.what());
   }
 
   m_renderer->end();
 
   const auto check_dblclicks = [&]() -> bool {
-    for (auto&& action : m_renderer->actions()) {
-      if (static_cast<int>(action.button) >= static_cast<int>(mousebtn::DOUBLE_LEFT)) {
-        return true;
-      }
+    if (m_action_ctxt->has_double_click()) {
+      return true;
     }
+
     for (auto&& action : m_opts.actions) {
       if (static_cast<int>(action.button) >= static_cast<int>(mousebtn::DOUBLE_LEFT)) {
         return true;
@@ -445,7 +458,19 @@ void bar::restack_window() {
 
   auto restacked = false;
 
-  if (wm_restack == "bspwm") {
+  if (wm_restack == "generic") {
+    try {
+      auto children = m_connection.query_tree(m_connection.screen()->root).children();
+      if (children.begin() != children.end() && *children.begin() != m_opts.window) {
+        const unsigned int value_mask = XCB_CONFIG_WINDOW_SIBLING | XCB_CONFIG_WINDOW_STACK_MODE;
+        const unsigned int value_list[2]{*children.begin(), XCB_STACK_MODE_BELOW};
+        m_connection.configure_window_checked(m_opts.window, value_mask, value_list);
+      }
+      restacked = true;
+    } catch (const exception& err) {
+      m_log.err("Failed to restack bar window (err=%s)", err.what());
+    }
+  } else if (wm_restack == "bspwm") {
     restacked = bspwm_util::restack_to_root(m_connection, m_opts.monitor, m_opts.window);
 #if ENABLE_I3
   } else if (wm_restack == "i3" && m_opts.override_redirect) {
@@ -636,6 +661,34 @@ void bar::handle(const evt::motion_notify& evt) {
   // scroll cursor is less important than click cursor, so we shouldn't return until we are sure there is no click
   // action
   bool found_scroll = false;
+  const auto has_action = [&](const vector<mousebtn>& buttons) -> bool {
+    for (auto btn : buttons) {
+      if (m_action_ctxt->has_action(btn, m_motion_pos) != tags::NO_ACTION) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  if (has_action({mousebtn::LEFT, mousebtn::MIDDLE, mousebtn::RIGHT, mousebtn::DOUBLE_LEFT, mousebtn::DOUBLE_MIDDLE,
+          mousebtn::DOUBLE_RIGHT})) {
+    if (!string_util::compare(m_opts.cursor, m_opts.cursor_click)) {
+      m_opts.cursor = m_opts.cursor_click;
+      m_sig.emit(cursor_change{string{m_opts.cursor}});
+    }
+
+    return;
+  }
+
+  if (has_action({mousebtn::SCROLL_DOWN, mousebtn::SCROLL_UP})) {
+    if (!string_util::compare(m_opts.cursor, m_opts.cursor_scroll)) {
+      m_opts.cursor = m_opts.cursor_scroll;
+      m_sig.emit(cursor_change{string{m_opts.cursor}});
+    }
+    return;
+  }
+
   const auto find_click_area = [&](const action& action) {
     if (!m_opts.cursor_click.empty() &&
         !(action.button == mousebtn::SCROLL_UP || action.button == mousebtn::SCROLL_DOWN ||
@@ -654,20 +707,6 @@ void bar::handle(const evt::motion_notify& evt) {
     return false;
   };
 
-  for (auto&& action : m_renderer->actions()) {
-    if (action.test(m_motion_pos)) {
-      m_log.trace("Found matching input area");
-      if (find_click_area(action))
-        return;
-    }
-  }
-  if (found_scroll) {
-    if (!string_util::compare(m_opts.cursor, m_opts.cursor_scroll)) {
-      m_opts.cursor = m_opts.cursor_scroll;
-      m_sig.emit(cursor_change{string{m_opts.cursor}});
-    }
-    return;
-  }
   for (auto&& action : m_opts.actions) {
     if (!action.command.empty()) {
       m_log.trace("Found matching fallback handler");
@@ -713,18 +752,12 @@ void bar::handle(const evt::button_press& evt) {
   m_buttonpress_pos = evt->event_x;
 
   const auto deferred_fn = [&](size_t) {
-    /*
-     * Iterate over all defined actions in reverse order until matching action is found
-     * To properly handle nested actions we iterate in reverse because nested actions are added later than their
-     * surrounding action block
-     */
-    auto actions = m_renderer->actions();
-    for (auto action = actions.rbegin(); action != actions.rend(); action++) {
-      if (action->button == m_buttonpress_btn && !action->active && action->test(m_buttonpress_pos)) {
-        m_log.trace("Found matching input area");
-        m_sig.emit(button_press{string{action->command}});
-        return;
-      }
+    tags::action_t action = m_action_ctxt->has_action(m_buttonpress_btn, m_buttonpress_pos);
+
+    if (action != tags::NO_ACTION) {
+      m_log.trace("Found matching input area");
+      m_sig.emit(button_press{m_action_ctxt->get_action(action)});
+      return;
     }
 
     for (auto&& action : m_opts.actions) {
@@ -808,7 +841,7 @@ void bar::handle(const evt::configure_notify&) {
 
 bool bar::on(const signals::eventqueue::start&) {
   m_log.trace("bar: Create renderer");
-  m_renderer = renderer::make(m_opts);
+  m_renderer = renderer::make(m_opts, *m_action_ctxt);
   m_opts.window = m_renderer->window();
 
   // Subscribe to window enter and leave events

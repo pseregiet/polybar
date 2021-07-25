@@ -12,11 +12,13 @@ namespace modules {
     explicit script_module(const bar_settings&, string);
     ~script_module() {}
 
-    void start();
-    void stop();
+    void start() override;
+    void stop() override;
 
     string get_output();
     bool build(builder* builder, const string& tag) const;
+
+    static constexpr auto TYPE = "custom/script";
 
    protected:
     chrono::duration<double> process(const mutex_wrapper<function<chrono::duration<double>()>>& handler) const;
@@ -44,6 +46,6 @@ namespace modules {
 
     bool m_stopping{false};
   };
-}
+}  // namespace modules
 
 POLYBAR_NS_END

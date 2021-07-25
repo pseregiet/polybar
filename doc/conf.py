@@ -13,12 +13,22 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
+from pathlib import Path
 import datetime
-import subprocess
-from docutils.nodes import Node
-from typing import List
-from sphinx.domains.changeset import VersionChange
+import sphinx
+import packaging.version
 
+def get_version(root_path):
+  """
+  Reads the polybar version from the version.txt at the root of the repo.
+  """
+  path = Path(root_path) / "version.txt"
+  with open(path, "r") as f:
+    for line in f.readlines():
+      if not line.startswith("#"):
+        return packaging.version.parse(line)
+
+  raise RuntimeError("No version found in {}".format(path))
 
 # -- Project information -----------------------------------------------------
 
@@ -49,6 +59,11 @@ else:
   # In all other builds conf.py is configured with cmake and put into the
   # build folder.
   doc_path = '@doc_path@'
+
+# The version from the version.txt file. Since we are not always first
+# configured by cmake, we don't necessarily have access to the current version
+# number
+version_txt = get_version(Path(doc_path).absolute().parent)
 
 # -- General configuration ---------------------------------------------------
 
@@ -89,13 +104,17 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
 
+highlight_language = 'none'
+
+smartquotes = False
+
 
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-if on_rtd:
+if on_rtd or os.environ.get('USE_RTD_THEME', '0') == '1':
   html_theme = 'sphinx_rtd_theme'
 else:
   html_theme = 'alabaster'
@@ -166,6 +185,9 @@ man_pages = [
     ('man/polybar.5', 'polybar', 'configuration file for polybar(1)', [], 5)
 ]
 
+man_make_section_directory = False
+
+
 # -- Options for Texinfo output ----------------------------------------------
 
 # Grouping the document tree into Texinfo files. List of tuples
@@ -198,23 +220,32 @@ epub_exclude_files = ['search.html']
 # The 'versionadded' and 'versionchanged' directives are overridden.
 suppress_warnings = ['app.add_directive']
 
-def setup(app):
-  app.add_directive('deprecated', VersionDirective)
-  app.add_directive('versionadded', VersionDirective)
-  app.add_directive('versionchanged', VersionDirective)
+# It is not exactly clear in which version the VersionChange class was
+# introduced, but we know it is available in at least 1.8.5.
+# This feature is mainly needed for the online docs on readthedocs for the docs
+# built from master, documentation built for proper releases should not even
+# mention unreleased changes. Because of that it's not that important that this
+# is added to local builds.
+if packaging.version.parse(sphinx.__version__) >= packaging.version.parse("1.8.5"):
 
-class VersionDirective(VersionChange):
-  """
-  Overwrites the Sphinx directive for versionchanged, versionadded, and
-  deprecated and adds an unreleased tag to versions that are not yet released
-  """
-  def run(self) -> List[Node]:
-    # If the tag exists 'git rev-parse' will succeed and otherwise fail
-    completed = subprocess.run(["git", "rev-parse", self.arguments[0]],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=doc_path,
-        check=False)
+  from typing import List
+  from docutils.nodes import Node
+  from sphinx.domains.changeset import VersionChange
 
-    if completed.returncode != 0:
-      self.arguments[0] += " (unreleased)"
+  def setup(app):
+    app.add_directive('deprecated', VersionDirective)
+    app.add_directive('versionadded', VersionDirective)
+    app.add_directive('versionchanged', VersionDirective)
 
-    return super().run()
+  class VersionDirective(VersionChange):
+    """
+    Overwrites the Sphinx directive for versionchanged, versionadded, and
+    deprecated and adds an unreleased tag to versions that are not yet released
+    """
+    def run(self) -> List[Node]:
+      directive_version = packaging.version.parse(self.arguments[0])
+
+      if directive_version > version_txt:
+        self.arguments[0] += " (unreleased)"
+
+      return super().run()

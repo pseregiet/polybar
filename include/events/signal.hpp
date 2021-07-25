@@ -1,9 +1,7 @@
 #pragma once
 
 #include "common.hpp"
-
 #include "components/ipc.hpp"
-#include "components/parser.hpp"
 #include "components/types.hpp"
 #include "utils/functional.hpp"
 
@@ -38,6 +36,7 @@ namespace signals {
 
       explicit value_signal(void* data) : m_ptr(data) {}
       explicit value_signal(ValueType&& data) : m_ptr(&data) {}
+      explicit value_signal(ValueType& data) : m_ptr(&data) {}
 
       virtual ~value_signal() {}
 
@@ -129,54 +128,6 @@ namespace signals {
       using base_type::base_type;
     };
   }  // namespace ui_tray
-
-  namespace parser {
-    struct change_background : public detail::value_signal<change_background, unsigned int> {
-      using base_type::base_type;
-    };
-    struct change_foreground : public detail::value_signal<change_foreground, unsigned int> {
-      using base_type::base_type;
-    };
-    struct change_underline : public detail::value_signal<change_underline, unsigned int> {
-      using base_type::base_type;
-    };
-    struct change_overline : public detail::value_signal<change_overline, unsigned int> {
-      using base_type::base_type;
-    };
-    struct change_font : public detail::value_signal<change_font, int> {
-      using base_type::base_type;
-    };
-    struct change_alignment : public detail::value_signal<change_alignment, alignment> {
-      using base_type::base_type;
-    };
-    struct reverse_colors : public detail::base_signal<reverse_colors> {
-      using base_type::base_type;
-    };
-    struct offset_pixel : public detail::value_signal<offset_pixel, int> {
-      using base_type::base_type;
-    };
-    struct attribute_set : public detail::value_signal<attribute_set, attribute> {
-      using base_type::base_type;
-    };
-    struct attribute_unset : public detail::value_signal<attribute_unset, attribute> {
-      using base_type::base_type;
-    };
-    struct attribute_toggle : public detail::value_signal<attribute_toggle, attribute> {
-      using base_type::base_type;
-    };
-    struct action_begin : public detail::value_signal<action_begin, action> {
-      using base_type::base_type;
-    };
-    struct action_end : public detail::value_signal<action_end, mousebtn> {
-      using base_type::base_type;
-    };
-    struct text : public detail::value_signal<text, string> {
-      using base_type::base_type;
-    };
-    struct control : public detail::value_signal<control, controltag> {
-      using base_type::base_type;
-    };
-  }  // namespace parser
 }  // namespace signals
 
 POLYBAR_NS_END

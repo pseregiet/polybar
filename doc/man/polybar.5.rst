@@ -31,10 +31,10 @@ places in the following order:
 
 * If the ``-c`` or ``--config`` command line argument is specified, it will use
   the path given there.
-* If the environment variable ``XDG_CONFIG_HOME`` is set it will use
-  ``$XDG_CONFIG_HOME/polybar/config``
-* If the environment variable ``HOME`` is set it will use
-  ``$HOME/.config/polybar/config``
+* ``$XDG_CONFIG_HOME/polybar/config``
+* ``$XDG_CONFIG_HOME/polybar/config.ini``
+* ``$HOME/.config/polybar/config``
+* ``$HOME/.config/polybar/config.ini``
 
 Syntax
 ------
@@ -128,7 +128,22 @@ in double-quotes:
 
   name = " value "
 
-Here ``name`` has a leading and trailing whitespace.
+Here the value of the ``name`` key has a leading and trailing whitespace.
+
+To treat characters with special meaning as literal characters, you need to
+prepend them with the backslash (``\``) escape character:
+
+::
+
+  name = "value\\value\\value"
+
+Value of this key ``name`` results in ``value\value\value``.
+
+.. note::
+
+  The only character with a special meaning right now is the backslash character
+  (``\``), which serves as the escape character.
+  More will be added in the future.
 
 Empty Lines & Comments
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -140,7 +155,7 @@ not affect polybar's behavior. Comment lines start with either the ``;`` or the
 .. note::
 
   Inline comments are not supported. For example the following line does not end
-  with a comment, they value of ``name`` is actually set to ``value ; comment``:
+  with a comment, the value of ``name`` is actually set to ``value ; comment``:
 
   ::
 

@@ -1,4 +1,7 @@
+#include "x11/tray_manager.hpp"
+
 #include <xcb/xcb_image.h>
+
 #include <thread>
 
 #include "cairo/context.hpp"
@@ -14,7 +17,6 @@
 #include "x11/background_manager.hpp"
 #include "x11/ewmh.hpp"
 #include "x11/icccm.hpp"
-#include "x11/tray_manager.hpp"
 #include "x11/window.hpp"
 #include "x11/winspec.hpp"
 #include "x11/xembed.hpp"
@@ -40,11 +42,12 @@ POLYBAR_NS
  * Create instance
  */
 tray_manager::make_type tray_manager::make() {
-  return factory_util::unique<tray_manager>(connection::make(), signal_emitter::make(), logger::make(), background_manager::make());
+  return factory_util::unique<tray_manager>(
+      connection::make(), signal_emitter::make(), logger::make(), background_manager::make());
 }
 
 tray_manager::tray_manager(connection& conn, signal_emitter& emitter, const logger& logger, background_manager& back)
-  : m_connection(conn), m_sig(emitter), m_log(logger), m_background_manager(back) {
+    : m_connection(conn), m_sig(emitter), m_log(logger), m_background_manager(back) {
   m_connection.attach_sink(this, SINK_PRIORITY_TRAY);
 }
 
@@ -125,15 +128,9 @@ void tray_manager::setup(const bar_settings& bar_opts) {
   }
 
   // Set user-defined background color
-  auto bg = conf.get(bs, "tray-background", ""s);
+  m_opts.background = conf.get(bs, "tray-background", bar_opts.background);
 
-  if (!bg.empty()) {
-    m_opts.background = color_util::parse(bg);
-  } else {
-    m_opts.background = bar_opts.background;
-  }
-
-  if (color_util::alpha_channel<unsigned char>(m_opts.background) != 255) {
+  if (m_opts.background.alpha_i() != 255) {
     m_log.trace("tray: enable transparency");
     m_opts.transparent = true;
   }
@@ -256,8 +253,8 @@ void tray_manager::deactivate(bool clear_selection) {
     m_log.trace("tray: Destroy window");
     m_connection.destroy_window(m_tray);
   }
-  m_context.release();
-  m_surface.release();
+  m_context.reset();
+  m_surface.reset();
   if (m_pixmap) {
     m_connection.free_pixmap(m_pixmap);
   }
@@ -393,13 +390,12 @@ void tray_manager::reconfigure_bg(bool realloc) {
 
   m_log.trace("tray: Reconfigure bg (realloc=%i)", realloc);
 
-
-  if(!m_context) {
+  if (!m_context) {
     return m_log.err("tray: no context for drawing the background");
   }
 
   cairo::surface* surface = m_bg_slice->get_surface();
-  if(!surface) {
+  if (!surface) {
     return m_log.err("tray: no root surface");
   }
 
@@ -431,12 +427,21 @@ void tray_manager::refresh_window() {
     m_connection.poly_fill_rectangle(m_pixmap, m_gc, 1, &rect);
   }
 
-  if(m_surface) m_surface->flush();
+  if (m_surface) {
+    m_surface->flush();
+  }
 
   m_connection.clear_area(0, m_tray, 0, 0, width, height);
 
   for (auto&& client : m_clients) {
-    client->clear_window();
+    try {
+      if (client->mapped()) {
+        client->clear_window();
+      }
+    } catch (const std::exception& e) {
+      m_log.err("Failed to clear tray client %s '%s' (%s)", m_connection.id(client->window()),
+          ewmh_util::get_wm_name(client->window()), e.what());
+    }
   }
 
   m_connection.flush();
@@ -480,8 +485,8 @@ void tray_manager::create_window() {
     << cw_class(XCB_WINDOW_CLASS_INPUT_OUTPUT)
     << cw_params_backing_store(XCB_BACKING_STORE_WHEN_MAPPED)
     << cw_params_event_mask(XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
-                           |XCB_EVENT_MASK_STRUCTURE_NOTIFY
-                           |XCB_EVENT_MASK_EXPOSURE)
+        |XCB_EVENT_MASK_STRUCTURE_NOTIFY
+        |XCB_EVENT_MASK_EXPOSURE)
     << cw_params_override_redirect(true);
   // clang-format on
 
@@ -523,10 +528,10 @@ void tray_manager::create_bg(bool realloc) {
   }
 
   if(realloc && m_surface) {
-    m_surface.release();
+    m_surface.reset();
   }
   if(realloc && m_context) {
-    m_context.release();
+    m_context.reset();
   }
 
   auto w = m_opts.width_max;
@@ -555,15 +560,16 @@ void tray_manager::create_bg(bool realloc) {
     }
   }
 
-  if(!m_surface) {
-    xcb_visualtype_t* visual = m_connection.visual_type_for_id(m_connection.screen(), m_connection.screen()->root_visual);
-    if(!visual) {
+  if (!m_surface) {
+    xcb_visualtype_t* visual =
+        m_connection.visual_type_for_id(m_connection.screen(), m_connection.screen()->root_visual);
+    if (!visual) {
       return m_log.err("Failed to get root visual for tray background");
     }
     m_surface = make_unique<cairo::xcb_surface>(m_connection, m_pixmap, visual, w, h);
   }
 
-  if(!m_context) {
+  if (!m_context) {
     m_context = make_unique<cairo::context>(*m_surface, m_log);
     m_context->clear();
     *m_context << CAIRO_OPERATOR_SOURCE << m_opts.background;
@@ -640,9 +646,9 @@ void tray_manager::set_wm_hints() {
 void tray_manager::set_tray_colors() {
   m_log.trace("tray: Set _NET_SYSTEM_TRAY_COLORS to %x", m_opts.background);
 
-  auto r = color_util::red_channel(m_opts.background);
-  auto g = color_util::green_channel(m_opts.background);
-  auto b = color_util::blue_channel(m_opts.background);
+  auto r = m_opts.background.red_i();
+  auto g = m_opts.background.green_i();
+  auto b = m_opts.background.blue_i();
 
   const unsigned int colors[12] = {
       r, g, b,  // normal
@@ -728,7 +734,7 @@ void tray_manager::track_selection_owner(xcb_window_t owner) {
  * Process client docking request
  */
 void tray_manager::process_docking_request(xcb_window_t win) {
-  m_log.info("Processing docking request from %s", m_connection.id(win));
+  m_log.info("Processing docking request from '%s' (%s)", ewmh_util::get_wm_name(win), m_connection.id(win));
 
   m_clients.emplace_back(factory_util::shared<tray_client>(m_connection, win, m_opts.width, m_opts.height));
   auto& client = m_clients.back();
@@ -736,18 +742,15 @@ void tray_manager::process_docking_request(xcb_window_t win) {
   try {
     m_log.trace("tray: Get client _XEMBED_INFO");
     xembed::query(m_connection, win, client->xembed());
-  } catch (const application_error& err) {
-    m_log.err(err.what());
-  } catch (const xpp::x::error::window& err) {
+  } catch (const std::exception& err) {
     m_log.err("Failed to query _XEMBED_INFO, removing client... (%s)", err.what());
     remove_client(win, true);
     return;
   }
 
   try {
-    const unsigned int mask{XCB_CW_BACK_PIXMAP | XCB_CW_EVENT_MASK};
-    const unsigned int values[]{
-        XCB_BACK_PIXMAP_PARENT_RELATIVE, XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY};
+    const unsigned int mask = XCB_CW_EVENT_MASK;
+    const unsigned int values[]{XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY};
 
     m_log.trace("tray: Update client window");
     m_connection.change_window_attributes_checked(client->window(), mask, values);
@@ -769,8 +772,9 @@ void tray_manager::process_docking_request(xcb_window_t win) {
       m_log.trace("tray: Map client");
       m_connection.map_window_checked(client->window());
     }
-  } catch (const xpp::x::error::window& err) {
-    m_log.err("Failed to setup tray client, removing... (%s)", err.what());
+
+  } catch (const std::exception& err) {
+    m_log.err("Failed to setup tray client removing... (%s)", err.what());
     remove_client(win, false);
   }
 }

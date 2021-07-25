@@ -1,13 +1,13 @@
+#include "modules/bspwm.hpp"
+
 #include <sys/socket.h>
 
 #include "drawtypes/iconset.hpp"
 #include "drawtypes/label.hpp"
-#include "modules/bspwm.hpp"
+#include "modules/meta/base.inl"
 #include "utils/factory.hpp"
 #include "utils/file.hpp"
 #include "utils/string.hpp"
-
-#include "modules/meta/base.inl"
 
 POLYBAR_NS
 
@@ -35,12 +35,16 @@ namespace {
     }
     return (base & mask) == mask;
   }
-}
+}  // namespace
 
 namespace modules {
   template class module<bspwm_module>;
 
   bspwm_module::bspwm_module(const bar_settings& bar, string name_) : event_module<bspwm_module>(bar, move(name_)) {
+    m_router->register_action_with_data(EVENT_FOCUS, &bspwm_module::action_focus);
+    m_router->register_action(EVENT_NEXT, &bspwm_module::action_next);
+    m_router->register_action(EVENT_PREV, &bspwm_module::action_prev);
+
     auto socket_path = bspwm_util::get_socket_path();
 
     if (!file_util::exists(socket_path)) {
@@ -54,6 +58,7 @@ namespace modules {
     m_pinworkspaces = m_conf.get(name(), "pin-workspaces", m_pinworkspaces);
     m_click = m_conf.get(name(), "enable-click", m_click);
     m_scroll = m_conf.get(name(), "enable-scroll", m_scroll);
+    m_occscroll = m_conf.get(name(), "occupied-scroll", m_occscroll);
     m_revscroll = m_conf.get(name(), "reverse-scroll", m_revscroll);
     m_inlinemode = m_conf.get(name(), "inline-mode", m_inlinemode);
     m_fuzzy_match = m_conf.get(name(), "fuzzy-match", m_fuzzy_match);
@@ -282,6 +287,8 @@ namespace modules {
           switch (value[0]) {
             case 0:
               break;
+            case '@':
+              break;
             case 'T':
               break;
             case '=':
@@ -396,20 +403,20 @@ namespace modules {
       size_t workspace_n{0U};
 
       if (m_scroll) {
-        builder->cmd(mousebtn::SCROLL_DOWN, EVENT_SCROLL_DOWN);
-        builder->cmd(mousebtn::SCROLL_UP, EVENT_SCROLL_UP);
+        builder->action(mousebtn::SCROLL_DOWN, *this, m_revscroll ? EVENT_NEXT : EVENT_PREV, "");
+        builder->action(mousebtn::SCROLL_UP, *this, m_revscroll ? EVENT_PREV : EVENT_NEXT, "");
       }
 
       for (auto&& ws : m_monitors[m_index]->workspaces) {
         if (ws.second.get()) {
-          if(workspace_n != 0 && *m_labelseparator) {
+          if (workspace_n != 0 && *m_labelseparator) {
             builder->node(m_labelseparator);
           }
 
           workspace_n++;
 
           if (m_click) {
-            builder->cmd(mousebtn::LEFT, sstream() << EVENT_CLICK << m_index << "+" << workspace_n, ws.second);
+            builder->action(mousebtn::LEFT, *this, EVENT_FOCUS, sstream() << m_index << "+" << workspace_n, ws.second);
           } else {
             builder->node(ws.second);
           }
@@ -423,8 +430,8 @@ namespace modules {
       }
 
       if (m_scroll) {
-        builder->cmd_close();
-        builder->cmd_close();
+        builder->action_close();
+        builder->action_close();
       }
 
       return workspace_n > 0;
@@ -445,54 +452,36 @@ namespace modules {
     return false;
   }
 
-  bool bspwm_module::input(string&& cmd) {
-    if (cmd.find(EVENT_PREFIX) != 0) {
-      return false;
-    }
+  void bspwm_module::action_focus(const string& data) {
+    size_t separator{string_util::find_nth(data, 0, "+", 1)};
+    size_t monitor_n{std::strtoul(data.substr(0, separator).c_str(), nullptr, 10)};
+    string workspace_n{data.substr(separator + 1)};
 
-    auto send_command = [this](string payload_cmd, string log_info) {
-      try {
-        auto ipc = bspwm_util::make_connection();
-        auto payload = bspwm_util::make_payload(payload_cmd);
-        m_log.info("%s: %s", name(), log_info);
-        ipc->send(payload->data, payload->len, 0);
-        ipc->disconnect();
-      } catch (const system_error& err) {
-        m_log.err("%s: %s", name(), err.what());
-      }
-    };
-
-    if (cmd.compare(0, strlen(EVENT_CLICK), EVENT_CLICK) == 0) {
-      cmd.erase(0, strlen(EVENT_CLICK));
-
-      size_t separator{string_util::find_nth(cmd, 0, "+", 1)};
-      size_t monitor_n{std::strtoul(cmd.substr(0, separator).c_str(), nullptr, 10)};
-      string workspace_n{cmd.substr(separator + 1)};
-
-      if (monitor_n < m_monitors.size()) {
-        send_command("desktop -f " + m_monitors[monitor_n]->name + ":^" + workspace_n,
-            "Sending desktop focus command to ipc handler");
-      } else {
-        m_log.err("%s: Invalid monitor index in command: %s", name(), cmd);
-      }
-
-      return true;
-    }
-
-    string scrolldir;
-
-    if (cmd.compare(0, strlen(EVENT_SCROLL_UP), EVENT_SCROLL_UP) == 0) {
-      scrolldir = m_revscroll ? "prev" : "next";
-    } else if (cmd.compare(0, strlen(EVENT_SCROLL_DOWN), EVENT_SCROLL_DOWN) == 0) {
-      scrolldir = m_revscroll ? "next" : "prev";
+    if (monitor_n < m_monitors.size()) {
+      send_command("desktop -f " + m_monitors[monitor_n]->name + ":^" + workspace_n,
+          "Sending desktop focus command to ipc handler");
     } else {
-      return false;
+      m_log.err("%s: Invalid monitor index in command: %s", name(), data);
     }
+  }
+  void bspwm_module::action_next() {
+    focus_direction(true);
+  }
 
+  void bspwm_module::action_prev() {
+    focus_direction(false);
+  }
+
+  void bspwm_module::focus_direction(bool next) {
+    string scrolldir = next ? "next" : "prev";
     string modifier;
 
+    if (m_occscroll) {
+      modifier += ".occupied";
+    }
+
     if (m_pinworkspaces) {
-      modifier = ".local";
+      modifier += ".local";
       for (const auto& mon : m_monitors) {
         if (m_bar.monitor->match(mon->name, false) && !mon->focused) {
           send_command("monitor -f " + mon->name, "Sending monitor focus command to ipc handler");
@@ -501,11 +490,16 @@ namespace modules {
       }
     }
 
-
     send_command("desktop -f " + scrolldir + modifier, "Sending desktop " + scrolldir + " command to ipc handler");
-
-    return true;
   }
-}
+
+  void bspwm_module::send_command(const string& payload_cmd, const string& log_info) {
+    auto ipc = bspwm_util::make_connection();
+    auto payload = bspwm_util::make_payload(payload_cmd);
+    m_log.info("%s: %s", name(), log_info);
+    ipc->send(payload->data, payload->len, 0);
+    ipc->disconnect();
+  }
+}  // namespace modules
 
 POLYBAR_NS_END

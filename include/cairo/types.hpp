@@ -45,7 +45,7 @@ namespace cairo {
     double y1;
     double x2;
     double y2;
-    vector<unsigned int> steps;
+    vector<rgba> steps;
   };
   struct rounded_corners {
     double x;
@@ -54,16 +54,24 @@ namespace cairo {
     double h;
     struct radius radius;
   };
+  struct circle_segment {
+    double x;
+    double y;
+    double w;
+    double angle_from;
+    double angle_to;
+    double radius;
+  };
   struct textblock {
     alignment align;
     string contents;
     int font;
-    unsigned int bg;
+    rgba bg{};
     cairo_operator_t bg_operator;
     rect bg_rect;
-    double *x_advance;
-    double *y_advance;
+    double* x_advance;
+    double* y_advance;
   };
-}
+}  // namespace cairo
 
 POLYBAR_NS_END
