@@ -4,6 +4,7 @@
 
 #include "components/config.hpp"
 #include "modules/meta/event_module.hpp"
+#include "modules/meta/types.hpp"
 #include "utils/i3.hpp"
 #include "utils/io.hpp"
 
@@ -23,19 +24,19 @@ namespace modules {
     enum class state {
       NONE,
       /**
-       * \brief Active workspace on focused monitor
+       * @brief Active workspace on focused monitor
        */
       FOCUSED,
       /**
-       * \brief Inactive workspace on any monitor
+       * @brief Inactive workspace on any monitor
        */
       UNFOCUSED,
       /**
-       * \brief Active workspace on unfocused monitor
+       * @brief Active workspace on unfocused monitor
        */
       VISIBLE,
       /**
-       * \brief Workspace with urgency hint set
+       * @brief Workspace with urgency hint set
        */
       URGENT,
     };
@@ -52,14 +53,14 @@ namespace modules {
     };
 
    public:
-    explicit i3_module(const bar_settings&, string);
+    explicit i3_module(const bar_settings&, string, const config&);
 
     void stop() override;
     bool has_event();
     bool update();
     bool build(builder* builder, const string& tag) const;
 
-    static constexpr auto TYPE = "internal/i3";
+    static constexpr auto TYPE = I3_TYPE;
 
     static constexpr auto EVENT_FOCUS = "focus";
     static constexpr auto EVENT_NEXT = "next";

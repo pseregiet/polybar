@@ -15,20 +15,19 @@ endif()
 option(CXXLIB_CLANG "Link against libc++" OFF)
 option(CXXLIB_GCC "Link against stdlibc++" OFF)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
-
 set(POLYBAR_FLAGS "" CACHE STRING "C++ compiler flags used for compiling polybar")
 
-list(APPEND cxx_base -Wall -Wextra -Wpedantic)
-list(APPEND cxx_debug -DDEBUG -g2)
+list(APPEND cxx_base -Wall -Wextra -Wpedantic -Wdeprecated-copy-dtor)
+list(APPEND cxx_debug -DDEBUG -g2 -Og)
 list(APPEND cxx_minsizerel "")
-list(APPEND cxx_sanitize -O0 -g -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls)
-list(APPEND cxx_coverage --coverage)
+list(APPEND cxx_sanitize ${cxx_debug} -O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls)
+list(APPEND cxx_coverage ${cxx_debug} --coverage)
 
 list(APPEND cxx_linker_base "")
 list(APPEND cxx_linker_minsizerel "")
@@ -79,8 +78,6 @@ elseif(CXXLIB_GCC)
   list(APPEND cxx_linker_base -lstdc++)
 endif()
 
-# Custom build type 'Coverage', inherits the debug flags
-list(APPEND cxx_coverage ${cxx_debug} ${cxx_coverage})
 SET(CMAKE_CXX_FLAGS_COVERAGE "${CMAKE_CXX_FLAGS_DEBUG} ${CMAKE_CXX_FLAGS_COVERAGE}")
 SET(CMAKE_EXE_LINKER_FLAGS_COVERAGE "${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${CMAKE_EXE_LINKER_FLAGS_COVERAGE}")
 SET(CMAKE_SHARED_LINKER_FLAGS_COVERAGE "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} ${CMAKE_SHARED_LINKER_FLAGS_COVERAGE}")
@@ -99,13 +96,13 @@ elseif (CMAKE_BUILD_TYPE_UPPER STREQUAL "COVERAGE")
   list(APPEND cxx_flags ${cxx_coverage})
 endif()
 
-list(APPEND cxx_linker_flags ${cxx_flags})
-
 string(REPLACE " " ";" polybar_flags_list "${POLYBAR_FLAGS}")
 list(APPEND cxx_flags ${polybar_flags_list})
+
+list(APPEND cxx_linker_flags ${cxx_flags})
 
 string(REPLACE ";" " " cxx_flags_str "${cxx_flags}")
 string(REPLACE ";" " " cxx_linker_flags_str "${cxx_linker_flags}")
 
 # TODO use target_link_options once min cmake version is >= 3.13
-set(CMAKE_EXE_LINKER_FLAGS "${cxx_linker_flags_str}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${cxx_linker_flags_str}")

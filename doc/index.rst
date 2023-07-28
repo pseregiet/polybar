@@ -13,12 +13,17 @@ Welcome to the official polybar documentation.
    :caption: Content:
 
    user/actions
+   user/ipc
+   user/modules/index
+   user/default-config
+   migration/index
 
 .. toctree::
    :maxdepth: 1
    :caption: Manual Pages:
 
    man/polybar.1
+   man/polybar-msg.1
    man/polybar.5
 
 .. toctree::
@@ -31,6 +36,9 @@ Welcome to the official polybar documentation.
    :maxdepth: 1
    :caption: Developer Documentation:
 
+   dev/getting-started
+   dev/style-guide
+   dev/testing
    dev/release-workflow
 
 Getting Help

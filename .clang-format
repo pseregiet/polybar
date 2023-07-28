@@ -1,13 +1,14 @@
 ---
 Language: Cpp
-Standard: Cpp11
+Standard: c++17
 BasedOnStyle: Google
 ColumnLimit: 120
-NamespaceIndentation: All
+NamespaceIndentation: Inner
 AlignAfterOpenBracket: DontAlign
 AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: false
 BreakConstructorInitializersBeforeComma: true
 DerivePointerAlignment: false
 PointerAlignment: Left
+SpacesBeforeTrailingComments: 1
 ---

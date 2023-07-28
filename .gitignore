@@ -6,5 +6,10 @@
 *.swp
 *.tmp
 .tags
+*.user
+
+# clangd
+/.cache
 
 polybar-*.tar
+*.cache

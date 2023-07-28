@@ -8,12 +8,13 @@ POLYBAR_NS
 namespace modules {
   template class module<date_module>;
 
-  date_module::date_module(const bar_settings& bar, string name_) : timer_module<date_module>(bar, move(name_)) {
+  date_module::date_module(const bar_settings& bar, string name_, const config& config)
+      : timer_module<date_module>(bar, move(name_), config) {
     if (!m_bar.locale.empty()) {
       datetime_stream.imbue(std::locale(m_bar.locale.c_str()));
     }
 
-    m_router->register_action(EVENT_TOGGLE, &date_module::action_toggle);
+    m_router->register_action(EVENT_TOGGLE, [this]() { action_toggle(); });
 
     m_dateformat = m_conf.get(name(), "date", ""s);
     m_dateformat_alt = m_conf.get(name(), "date-alt", ""s);

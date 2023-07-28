@@ -1,6 +1,6 @@
 #pragma once
 
-#include <xcb/xcb_aux.h>
+#include <xcb/xcb.h>
 
 #include "common.hpp"
 #include "components/types.hpp"
@@ -117,7 +117,7 @@ struct cw_flush {
  * Create X window
  *
  * Example usage:
- * \code cpp
+ * @code cpp
  *   auto win = winspec(m_connection)
  *     << cw_size(100, 200)
  *     << cw_pos(10, -20)
@@ -125,7 +125,7 @@ struct cw_flush {
  *     << cw_class(XCB_WINDOW_CLASS_INPUT_ONLY)
  *     << cw_parent(0x000110a);
  *     << cw_flush(false);
- * \endcode
+ * @endcode
  */
 class winspec {
  public:
@@ -173,7 +173,7 @@ class winspec {
   unsigned short int m_width{1U};
   unsigned short int m_height{1U};
   unsigned short int m_border{0};
-  unsigned int m_mask{0};
+  uint32_t m_mask{0};
   xcb_params_cw_t m_params{};
 };
 

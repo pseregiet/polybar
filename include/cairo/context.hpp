@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <deque>
+#include <iomanip>
+#include <iterator>
 
 #include "cairo/font.hpp"
 #include "cairo/surface.hpp"
@@ -21,7 +23,7 @@ POLYBAR_NS
 
 namespace cairo {
   /**
-   * \brief Cairo context
+   * @brief Cairo context
    */
   class context {
    public:
@@ -117,9 +119,12 @@ namespace cairo {
 
     context& operator<<(const rounded_corners& c) {
       cairo_new_sub_path(m_c);
-      cairo_arc(m_c, c.x + c.w - c.radius.top_right, c.y + c.radius.top_right, c.radius.top_right, -90 * degree, 0 * degree);
-      cairo_arc(m_c, c.x + c.w - c.radius.bottom_right, c.y + c.h - c.radius.bottom_right, c.radius.bottom_right, 0 * degree, 90 * degree);
-      cairo_arc(m_c, c.x + c.radius.bottom_left, c.y + c.h - c.radius.bottom_left, c.radius.bottom_left, 90 * degree, 180 * degree);
+      cairo_arc(
+          m_c, c.x + c.w - c.radius.top_right, c.y + c.radius.top_right, c.radius.top_right, -90 * degree, 0 * degree);
+      cairo_arc(m_c, c.x + c.w - c.radius.bottom_right, c.y + c.h - c.radius.bottom_right, c.radius.bottom_right,
+          0 * degree, 90 * degree);
+      cairo_arc(m_c, c.x + c.radius.bottom_left, c.y + c.h - c.radius.bottom_left, c.radius.bottom_left, 90 * degree,
+          180 * degree);
       cairo_arc(m_c, c.x + c.radius.top_left, c.y + c.radius.top_left, c.radius.top_left, 180 * degree, 270 * degree);
       cairo_close_path(m_c);
       return *this;
@@ -142,7 +147,8 @@ namespace cairo {
           cairo_rel_line_to(m_c, 0, segment.w);
           break;
       }
-      cairo_arc_negative(m_c, segment.x, segment.y, segment.radius - segment.w, segment.angle_to * degree, segment.angle_from * degree);
+      cairo_arc_negative(m_c, segment.x, segment.y, segment.radius - segment.w, segment.angle_to * degree,
+          segment.angle_from * degree);
       cairo_close_path(m_c);
       return *this;
     }
@@ -158,9 +164,21 @@ namespace cairo {
         std::iter_swap(fns.begin(), fns.begin() + t.font - 1);
       }
 
-      string utf8 = string(t.contents);
-      utils::unicode_charlist chars;
-      utils::utf8_to_ucs4((const unsigned char*)utf8.c_str(), chars);
+      string utf8 = t.contents;
+      string_util::unicode_charlist chars;
+      bool valid = string_util::utf8_to_ucs4(utf8, chars);
+
+      // The conversion already removed any invalid chunks. We should probably log a warning though.
+      if (!valid) {
+        sstream hex;
+        hex << std::hex << std::setw(2) << std::setfill('0');
+
+        for(const char& c: utf8) {
+          hex << (static_cast<int>(c) & 0xff) << " ";
+        }
+
+        m_log.warn("Dropping invalid parts of UTF8 text '%s' %s", utf8, hex.to_string());
+      }
 
       while (!chars.empty()) {
         auto remaining = chars.size();
@@ -190,6 +208,12 @@ namespace cairo {
           // Get subset extents
           cairo_text_extents_t extents;
           f->textwidth(subset, &extents);
+
+          /*
+           * Make sure we don't advance partial pixels, this can cause problems
+           * later when cairo renders background colors over half-pixels.
+           */
+          extents.x_advance = std::ceil(extents.x_advance);
 
           // Draw the background
           if (t.bg_rect.h != 0.0) {
@@ -223,9 +247,9 @@ namespace cairo {
           continue;
         }
 
-        char unicode[6]{'\0'};
-        utils::ucs4_to_utf8(unicode, chars.begin()->codepoint);
-        m_log.warn("Dropping unmatched character %s (U+%04x) in '%s'", unicode, chars.begin()->codepoint, t.contents);
+        std::array<char, 5> unicode{};
+        string_util::ucs4_to_utf8(unicode, chars.begin()->codepoint);
+        m_log.warn("Dropping unmatched character '%s' (U+%04x) in '%s'", unicode.data(), chars.begin()->codepoint, t.contents);
         utf8.erase(chars.begin()->offset, chars.begin()->length);
         for (auto&& c : chars) {
           c.offset -= chars.begin()->length;
@@ -360,9 +384,9 @@ namespace cairo {
     std::deque<pair<double, double>> m_points;
     int m_activegroups{0};
 
-    private:
-      const double degree = M_PI / 180.0;
+   private:
+    const double degree = M_PI / 180.0;
   };
-}  // namespace cairo
+} // namespace cairo
 
 POLYBAR_NS_END

@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "modules/meta/inotify_module.hpp"
+#include "modules/meta/types.hpp"
 
 POLYBAR_NS
 
@@ -46,16 +47,16 @@ namespace modules {
     using consumption_reader = mutex_wrapper<value_reader<string /* watts */>>;
 
    public:
-    explicit battery_module(const bar_settings&, string);
+    explicit battery_module(const bar_settings&, string, const config&);
 
     void start() override;
     void teardown();
     void idle();
-    bool on_event(inotify_event* event);
+    bool on_event(const inotify_event& event);
     string get_format() const;
     bool build(builder* builder, const string& tag) const;
 
-    static constexpr auto TYPE = "internal/battery";
+    static constexpr auto TYPE = BATTERY_TYPE;
 
    protected:
     state current_state();
@@ -112,9 +113,9 @@ namespace modules {
     string m_timeformat;
     size_t m_unchanged{SKIP_N_UNCHANGED};
     chrono::duration<double> m_interval{};
-    chrono::system_clock::time_point m_lastpoll;
+    chrono::steady_clock::time_point m_lastpoll;
     thread m_subthread;
   };
-}  // namespace modules
+} // namespace modules
 
 POLYBAR_NS_END

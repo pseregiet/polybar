@@ -16,14 +16,14 @@ namespace modules {
   /**
    * Construct module
    */
-  xbacklight_module::xbacklight_module(const bar_settings& bar, string name_)
-      : static_module<xbacklight_module>(bar, move(name_)), m_connection(connection::make()) {
-    m_router->register_action(EVENT_INC, &xbacklight_module::action_inc);
-    m_router->register_action(EVENT_DEC, &xbacklight_module::action_dec);
+  xbacklight_module::xbacklight_module(const bar_settings& bar, string name_, const config& config)
+      : static_module<xbacklight_module>(bar, move(name_), config), m_connection(connection::make()) {
+    m_router->register_action(EVENT_INC, [this]() { action_inc(); });
+    m_router->register_action(EVENT_DEC, [this]() { action_dec(); });
 
     auto output = m_conf.get(name(), "output", m_bar.monitor->name);
 
-    auto monitors = randr_util::get_monitors(m_connection, m_connection.root(), bar.monitor_strict, false);
+    auto monitors = randr_util::get_monitors(m_connection, bar.monitor_strict, false);
 
     m_output = randr_util::match_monitor(monitors, output, bar.monitor_exact);
 
@@ -123,7 +123,7 @@ namespace modules {
       m_builder->action(mousebtn::SCROLL_DOWN, *this, EVENT_DEC, "");
     }
 
-    m_builder->append(output);
+    m_builder->node(output);
 
     m_builder->action_close();
     m_builder->action_close();
@@ -164,6 +164,6 @@ namespace modules {
     m_connection.change_output_property_checked(
         m_output->output, m_output->backlight.atom, XCB_ATOM_INTEGER, 32, XCB_PROP_MODE_REPLACE, 1, values);
   }
-}  // namespace modules
+} // namespace modules
 
 POLYBAR_NS_END

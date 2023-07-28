@@ -3,6 +3,7 @@
 #include "components/config.hpp"
 #include "modules/meta/event_handler.hpp"
 #include "modules/meta/static_module.hpp"
+#include "modules/meta/types.hpp"
 #include "settings.hpp"
 #include "x11/extensions/randr.hpp"
 
@@ -24,13 +25,13 @@ namespace modules {
    */
   class xbacklight_module : public static_module<xbacklight_module>, public event_handler<evt::randr_notify> {
    public:
-    explicit xbacklight_module(const bar_settings& bar, string name_);
+    explicit xbacklight_module(const bar_settings& bar, string name_, const config&);
 
     void update();
     string get_output();
     bool build(builder* builder, const string& tag) const;
 
-    static constexpr auto TYPE = "internal/xbacklight";
+    static constexpr auto TYPE = XBACKLIGHT_TYPE;
 
     static constexpr const char* EVENT_INC = "inc";
     static constexpr const char* EVENT_DEC = "dec";
@@ -57,7 +58,7 @@ namespace modules {
     progressbar_t m_progressbar;
 
     bool m_scroll{true};
-    std::atomic<int> m_percentage{0};
+    int m_percentage{0};
   };
 }  // namespace modules
 

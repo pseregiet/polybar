@@ -19,7 +19,9 @@ class rgba {
 
   operator string() const;
   operator uint32_t() const;
+  operator bool() const;
   bool operator==(const rgba& other) const;
+  bool operator!=(const rgba& other) const;
 
   uint32_t value() const;
   type get_type() const;
@@ -35,6 +37,7 @@ class rgba {
   uint8_t blue_i() const;
 
   bool has_color() const;
+  bool is_transparent() const;
   rgba apply_alpha_to(rgba other) const;
   rgba try_apply_alpha_to(rgba other) const;
 

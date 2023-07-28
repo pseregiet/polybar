@@ -3,8 +3,10 @@
 #include "common.hpp"
 #include "components/config.hpp"
 #include "components/types.hpp"
+#include "drawtypes/layouticonset.hpp"
 #include "modules/meta/event_handler.hpp"
 #include "modules/meta/static_module.hpp"
+#include "modules/meta/types.hpp"
 #include "x11/extensions/xkb.hpp"
 #include "x11/window.hpp"
 
@@ -20,13 +22,13 @@ namespace modules {
       : public static_module<xkeyboard_module>,
         public event_handler<evt::xkb_new_keyboard_notify, evt::xkb_state_notify, evt::xkb_indicator_state_notify> {
    public:
-    explicit xkeyboard_module(const bar_settings& bar, string name_);
+    explicit xkeyboard_module(const bar_settings& bar, string name_, const config&);
 
     string get_output();
     void update();
     bool build(builder* builder, const string& tag) const;
 
-    static constexpr auto TYPE = "internal/xkeyboard";
+    static constexpr auto TYPE = XKEYBOARD_TYPE;
 
     static constexpr const char* EVENT_SWITCH = "switch";
 
@@ -39,6 +41,9 @@ namespace modules {
     void handle(const evt::xkb_indicator_state_notify& evt) override;
 
     void action_switch();
+
+    void define_layout_icon(const string& entry, const string& layout, const string& variant, label_t&& icon);
+    void parse_icons();
 
    private:
     static constexpr const char* TAG_LABEL_LAYOUT{"<label-layout>"};
@@ -61,7 +66,7 @@ namespace modules {
     map<keyboard::indicator::type, label_t> m_indicator_off_labels;
 
     vector<string> m_blacklist;
-    iconset_t m_layout_icons;
+    layouticonset_t m_layout_icons;
     iconset_t m_indicator_icons_on;
     iconset_t m_indicator_icons_off;
   };

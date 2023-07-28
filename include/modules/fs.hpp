@@ -1,9 +1,8 @@
 #pragma once
 
-#include <utility>
-
 #include "components/config.hpp"
 #include "modules/meta/timer_module.hpp"
+#include "modules/meta/types.hpp"
 #include "settings.hpp"
 
 POLYBAR_NS
@@ -37,14 +36,14 @@ namespace modules {
    */
   class fs_module : public timer_module<fs_module> {
    public:
-    explicit fs_module(const bar_settings&, string);
+    explicit fs_module(const bar_settings&, string, const config&);
 
     bool update();
     string get_format() const;
     string get_output();
     bool build(builder* builder, const string& tag) const;
 
-    static constexpr auto TYPE = "internal/fs";
+    static constexpr auto TYPE = FS_TYPE;
 
    private:
     static constexpr auto FORMAT_MOUNTED = "format-mounted";
@@ -68,12 +67,12 @@ namespace modules {
     vector<fs_mount_t> m_mounts;
     bool m_fixed{false};
     bool m_remove_unmounted{false};
-    int m_spacing{2};
+    spacing_val m_spacing{spacing_type::SPACE, 2U};
     int m_perc_used_warn{90};
 
     // used while formatting output
     size_t m_index{0_z};
   };
-}  // namespace modules
+} // namespace modules
 
 POLYBAR_NS_END

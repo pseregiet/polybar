@@ -7,29 +7,27 @@ POLYBAR_NS
 /**
  * Base class for non copyable objects
  */
-template <class T>
 class non_copyable_mixin {
- protected:
-  non_copyable_mixin() {}
-  ~non_copyable_mixin() {}
+ public:
+  non_copyable_mixin(const non_copyable_mixin&) = delete;
+  non_copyable_mixin& operator=(const non_copyable_mixin&) = delete;
 
- private:
-  non_copyable_mixin(const non_copyable_mixin&);
-  non_copyable_mixin& operator=(const non_copyable_mixin&);
+ protected:
+  non_copyable_mixin() = default;
+  ~non_copyable_mixin() = default;
 };
 
 /**
  * Base class for non movable objects
  */
-template <class T>
 class non_movable_mixin {
- protected:
-  non_movable_mixin() {}
-  ~non_movable_mixin() {}
+ public:
+  non_movable_mixin(non_movable_mixin&&) = delete;
+  non_movable_mixin& operator=(non_movable_mixin&&) = delete;
 
- private:
-  non_movable_mixin(non_movable_mixin&&);
-  non_movable_mixin& operator=(non_movable_mixin&&);
+ protected:
+  non_movable_mixin() = default;
+  ~non_movable_mixin() = default;
 };
 
 POLYBAR_NS_END

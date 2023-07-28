@@ -1,6 +1,7 @@
 #pragma once
 
 #include "modules/meta/timer_module.hpp"
+#include "modules/meta/types.hpp"
 #include "settings.hpp"
 
 POLYBAR_NS
@@ -20,13 +21,13 @@ namespace modules {
 
   class cpu_module : public timer_module<cpu_module> {
    public:
-    explicit cpu_module(const bar_settings&, string);
+    explicit cpu_module(const bar_settings&, string, const config&);
 
     bool update();
     string get_format() const;
     bool build(builder* builder, const string& tag) const;
 
-    static constexpr auto TYPE = "internal/cpu";
+    static constexpr auto TYPE = CPU_TYPE;
 
    protected:
     bool read_values();
@@ -40,13 +41,12 @@ namespace modules {
     static constexpr auto TAG_RAMP_LOAD_PER_CORE = "<ramp-coreload>";
     static constexpr auto FORMAT_WARN = "format-warn";
 
-
     label_t m_label;
     label_t m_labelwarn;
     progressbar_t m_barload;
     ramp_t m_rampload;
     ramp_t m_rampload_core;
-    int m_ramp_padding;
+    spacing_val m_ramp_padding{spacing_type::SPACE, 1U};
 
     vector<cpu_time_t> m_cputimes;
     vector<cpu_time_t> m_cputimes_prev;

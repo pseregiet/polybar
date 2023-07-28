@@ -2,6 +2,7 @@
 
 #include "components/config.hpp"
 #include "modules/meta/inotify_module.hpp"
+#include "modules/meta/types.hpp"
 #include "settings.hpp"
 
 POLYBAR_NS
@@ -20,13 +21,13 @@ namespace modules {
     string get_output();
 
    public:
-    explicit backlight_module(const bar_settings&, string);
+    explicit backlight_module(const bar_settings&, string, const config&);
 
     void idle();
-    bool on_event(inotify_event* event);
+    bool on_event(const inotify_event& event);
     bool build(builder* builder, const string& tag) const;
 
-    static constexpr auto TYPE = "internal/backlight";
+    static constexpr auto TYPE = BACKLIGHT_TYPE;
 
     static constexpr const char* EVENT_INC = "inc";
     static constexpr const char* EVENT_DEC = "dec";
@@ -48,6 +49,7 @@ namespace modules {
     string m_path_backlight;
     float m_max_brightness;
     bool m_scroll{false};
+    int m_scroll_interval{5};
     bool m_use_actual_brightness{true};
 
     brightness_handle m_val;
@@ -55,6 +57,6 @@ namespace modules {
 
     int m_percentage = 0;
   };
-}  // namespace modules
+} // namespace modules
 
 POLYBAR_NS_END
